@@ -1,0 +1,5 @@
+# depslib dependency file v1.0
+1734346095 source:c:\users\acer\desktop\podstawy informatyki\fluid-simulation\main.cpp
+	<iostream>
+	<SFML/Graphics.hpp>
+
