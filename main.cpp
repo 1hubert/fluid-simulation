@@ -1,37 +1,170 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <cmath>
-#include <iostream>
+#include <algorithm>
 
-struct Droplet {
+struct Particle {
     sf::CircleShape shape;
+    sf::Vector2f position;
     sf::Vector2f velocity;
+    sf::Vector2f force;
+    float density;
+    float pressure;
 
-    Droplet(float radius) : shape(radius), velocity(0.f, 0.f) {}
+    Particle(float radius) : shape(radius), density(0.f), pressure(0.f) {
+        shape.setFillColor(sf::Color::Cyan);
+    }
 };
 
+class FluidSimulator {
+private:
+    sf::Vector2f gravity;
+    sf::FloatRect bounds;
+    std::vector<Particle> particles;
+
+    // Adjusted physics constants for more stable simulation
+    const float PARTICLE_MASS = 100.0f;          // Reduced from 100.0f
+    const float REST_DENSITY = 50.f;           // Reduced from 100.f
+    const float GAS_CONSTANT = 100.f;           // Reduced from 20.f
+    const float VISCOSITY = 7000.f;               // Reduced from 2.f
+    const float SMOOTHING_LENGTH = 15.f;       // Adjusted from 13.f
+    const float PARTICLE_RADIUS = 5.f;         // Made explicit for collision
+    const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH;
+    const float POLY6_SCALE = 315.f / (64.f * static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 9));
+    const float SPIKY_GRAD_SCALE = -45.f / (static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 6));
+    const float VISC_LAP_SCALE = 45.f / (static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 6));
+    const float MAX_VELOCITY = 300.f;          // Added velocity clamping
+
+public:
+    FluidSimulator(const sf::FloatRect& boundsRect, const sf::Vector2f& gravityVec = sf::Vector2f(0.f, 981.f))
+        : gravity(gravityVec), bounds(boundsRect) {}
+
+    void addParticle(const sf::Vector2f& pos) {
+        Particle p(PARTICLE_RADIUS);
+        p.position = pos;
+        p.velocity = sf::Vector2f(0.f, 0.f);
+        p.force = sf::Vector2f(0.f, 0.f);
+        p.shape.setPosition(pos);
+        particles.push_back(p);
+    }
+
+    void update(float dt) {
+        computeDensityPressure();
+        computeForces();
+        integrate(dt);
+    }
+
+    void draw(sf::RenderWindow& window) {
+        for (auto& p : particles) {
+            float pressure_scale = std::min(p.pressure / (GAS_CONSTANT * REST_DENSITY), 1.0f);
+            sf::Color color(
+                static_cast<sf::Uint8>(51 + 204 * pressure_scale),
+                static_cast<sf::Uint8>(153 + 102 * (1.0f - pressure_scale)),
+                255
+            );
+            p.shape.setFillColor(color);
+            p.shape.setPosition(p.position);
+            window.draw(p.shape);
+        }
+    }
+
+private:
+    void computeDensityPressure() {
+        for (auto& pi : particles) {
+            pi.density = 0.f;
+            for (auto& pj : particles) {
+                sf::Vector2f diff = pi.position - pj.position;
+                float r2 = diff.x * diff.x + diff.y * diff.y;
+
+                if (r2 < SMOOTHING_LENGTH_SQ) {
+                    pi.density += PARTICLE_MASS * POLY6_SCALE * std::pow(SMOOTHING_LENGTH_SQ - r2, 3.f);
+                }
+            }
+            pi.pressure = GAS_CONSTANT * (pi.density - REST_DENSITY);
+        }
+    }
+
+    void computeForces() {
+        for (auto& pi : particles) {
+            sf::Vector2f pressure_force(0.f, 0.f);
+            sf::Vector2f viscosity_force(0.f, 0.f);
+
+            for (auto& pj : particles) {
+                if (&pi == &pj) continue;
+
+                sf::Vector2f diff = pi.position - pj.position;
+                float r = std::sqrt(diff.x * diff.x + diff.y * diff.y);
+
+                if (r < SMOOTHING_LENGTH && r > 0.0001f) { // Added minimum distance check
+                    // Pressure force
+                    float pressure_scale = (pi.pressure + pj.pressure) / (2.f * pi.density * pj.density);
+                    sf::Vector2f normalized_diff = diff / r;
+                    pressure_force += normalized_diff * (PARTICLE_MASS * pressure_scale *
+                        SPIKY_GRAD_SCALE * std::pow(SMOOTHING_LENGTH - r, 2.f));
+
+                    // Viscosity force
+                    viscosity_force += (pj.velocity - pi.velocity) *
+                        (PARTICLE_MASS * VISCOSITY / pj.density * VISC_LAP_SCALE * (SMOOTHING_LENGTH - r));
+                }
+            }
+
+            // Limit force magnitude
+            pi.force = pressure_force + viscosity_force + gravity * pi.density;
+            float force_magnitude = std::sqrt(pi.force.x * pi.force.x + pi.force.y * pi.force.y);
+            if (force_magnitude > MAX_VELOCITY * pi.density) {
+                pi.force *= (MAX_VELOCITY * pi.density / force_magnitude);
+            }
+        }
+    }
+
+    void integrate(float dt) {
+        const float DAMPING = 0.4f;  // Increased from 0.2f
+
+        for (auto& p : particles) {
+            // Update velocity with force
+            p.velocity += dt * p.force / p.density;
+
+            // Clamp velocity magnitude
+            float speed = std::sqrt(p.velocity.x * p.velocity.x + p.velocity.y * p.velocity.y);
+            if (speed > MAX_VELOCITY) {
+                p.velocity *= MAX_VELOCITY / speed;
+            }
+
+            // Update position
+            p.position += dt * p.velocity;
+
+            // Border collision with particle radius
+            if (p.position.x + PARTICLE_RADIUS < bounds.left) {
+                p.position.x = bounds.left - PARTICLE_RADIUS;
+                p.velocity.x *= -DAMPING;
+            }
+            if (p.position.x + PARTICLE_RADIUS > bounds.left + bounds.width) {
+                p.position.x = bounds.left + bounds.width - PARTICLE_RADIUS;
+                p.velocity.x *= -DAMPING;
+            }
+            if (p.position.y - PARTICLE_RADIUS < bounds.top) {
+                p.position.y = bounds.top + PARTICLE_RADIUS;
+                p.velocity.y *= -DAMPING;
+            }
+            if (p.position.y + PARTICLE_RADIUS > bounds.top + bounds.height) {
+                p.position.y = bounds.top + bounds.height - PARTICLE_RADIUS;
+                p.velocity.y *= -DAMPING;
+            }
+        }
+    }
+};
+
+// Main function remains the same
 int main() {
-    // Create window
     sf::RenderWindow window(
         sf::VideoMode(800, 600),
-        "Fluid Sim",
-        sf::Style::Titlebar | sf::Style::Close);
+        "SPH Fluid Simulation",
+        sf::Style::Titlebar | sf::Style::Close
+    );
     window.setFramerateLimit(60);
-    const float deltaTime = 1.f / 60.f;
 
-    // Calculate grid parameters
-    const int GRID_SIZE = 10;
-    const float DROPLET_RADIUS = 10.f;
-    const float GAP = 1.f;  // Gap between droplets
-    const float SPACING =   DROPLET_RADIUS * 2 + GAP;  // Total space between droplet centers
-
-    // Physics parameters
-    const float GRAVITY = 400.f;  // Pixels per second squared
-    const float DAMPING = 0.1f;   // Energy loss in collisions
-
-    // Border parameters
-    const float BORDER_THICKNESS = 4.f;
     const float BORDER_PADDING = 20.f;
+    const float BORDER_THICKNESS = 4.f;
     sf::RectangleShape border;
     border.setPosition(BORDER_PADDING, BORDER_PADDING);
     border.setSize(sf::Vector2f(
@@ -42,116 +175,52 @@ int main() {
     border.setOutlineColor(sf::Color::White);
     border.setOutlineThickness(BORDER_THICKNESS);
 
-    // Calculate grid dimensions and starting position
-    const float GRID_WIDTH = GRID_SIZE * SPACING;
-    const float GRID_HEIGHT = GRID_SIZE * SPACING;
-    const float startX = (window.getSize().x - GRID_WIDTH) / 2;
-    const float startY = (window.getSize().y - GRID_HEIGHT) / 2;
+    sf::FloatRect bounds(
+        BORDER_PADDING + BORDER_THICKNESS,
+        BORDER_PADDING + BORDER_THICKNESS,
+        window.getSize().x - 2 * (BORDER_PADDING + BORDER_THICKNESS),
+        window.getSize().y - 2 * (BORDER_PADDING + BORDER_THICKNESS)
+    );
 
-    // Create droplets
-    std::vector<Droplet> droplets;
-    droplets.reserve(GRID_SIZE * GRID_SIZE);
+    FluidSimulator simulator(bounds);
+
+    const int GRID_SIZE = 30;
+    const float SPACING = 12.f;
+    const float startX = bounds.left + bounds.width * 0.25f;
+    const float startY = bounds.top + bounds.height * 0.25f;
 
     for (int row = 0; row < GRID_SIZE; row++) {
         for (int col = 0; col < GRID_SIZE; col++) {
-            Droplet droplet(DROPLET_RADIUS);
-            droplet.shape.setPosition(
-                startX + (col * SPACING),
-                startY + (row * SPACING)
-            );
-            droplet.shape.setFillColor(sf::Color::Cyan);
-            droplets.push_back(droplet);
+            simulator.addParticle(sf::Vector2f(
+                startX + col * SPACING,
+                startY + row * SPACING
+            ));
         }
     }
 
+    sf::Clock clock;
     while (window.isOpen()) {
-        // Event stuff
         sf::Event event;
         while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed)
-                window.close();
-        }
+            switch (event.type) {
+                case sf::Event::Closed:
+                    window.close();
+                    break;
+                case sf::Event::KeyPressed:
+                    if (event.key.code == sf::Keyboard::Q)
+                        window.close();
+                    break;
 
-        // Physics update
-        for (auto& droplet : droplets) {
-            // Apply gravity
-            droplet.velocity.y += GRAVITY * deltaTime;
 
-            // Update position
-            droplet.shape.move(droplet.velocity * deltaTime);
-
-            // Border collision
-            sf::Vector2f pos = droplet.shape.getPosition();
-
-            // Left border
-            if (pos.x < BORDER_PADDING + BORDER_THICKNESS) {
-                droplet.shape.setPosition(BORDER_PADDING + BORDER_THICKNESS, pos.y);
-                droplet.velocity.x = -droplet.velocity.x * DAMPING;
-            }
-            // Right border
-            if (pos.x + DROPLET_RADIUS * 2 > window.getSize().x - BORDER_PADDING - BORDER_THICKNESS) {
-                droplet.shape.setPosition(
-                    window.getSize().x - BORDER_PADDING - BORDER_THICKNESS - DROPLET_RADIUS * 2,
-                    pos.y
-                );
-                droplet.velocity.x = -droplet.velocity.x * DAMPING;
-            }
-            // Top border
-            if (pos.y < BORDER_PADDING + BORDER_THICKNESS) {
-                droplet.shape.setPosition(pos.x, BORDER_PADDING + BORDER_THICKNESS);
-                droplet.velocity.y = -droplet.velocity.y * DAMPING;
-            }
-            // Bottom border
-            if (pos.y + DROPLET_RADIUS * 2 > window.getSize().y - BORDER_PADDING - BORDER_THICKNESS) {
-                droplet.shape.setPosition(
-                    pos.x,
-                    window.getSize().y - BORDER_PADDING - BORDER_THICKNESS - DROPLET_RADIUS * 2
-                );
-                droplet.velocity.y = -droplet.velocity.y * DAMPING;
             }
         }
 
-        // Droplet collision
-        for (size_t i = 0; i < droplets.size(); i++) {
-            for (size_t j = i + 1; j < droplets.size(); j++) {
-                sf::Vector2f pos1 = droplets[i].shape.getPosition();
-                sf::Vector2f pos2 = droplets[j].shape.getPosition();
+        float dt = std::min(clock.restart().asSeconds(), 1.f / 60.f);
+        simulator.update(dt);
 
-                // Add radius to get center position
-                pos1.x += DROPLET_RADIUS;
-                pos1.y += DROPLET_RADIUS;
-                pos2.x += DROPLET_RADIUS;
-                pos2.y += DROPLET_RADIUS;
-
-                sf::Vector2f diff = pos1 - pos2;
-                float dist = std::sqrt(diff.x * diff.x + diff.y * diff.y);
-
-                if (dist < DROPLET_RADIUS * 2) {
-                    // Collision response
-                    sf::Vector2f normal = diff / dist;
-                    float overlap = DROPLET_RADIUS * 2 - dist;
-
-                    // Separate droplets
-                    droplets[i].shape.move(normal * overlap * 0.5f);
-                    droplets[j].shape.move(-normal * overlap * 0.5f);
-
-                    // Calculate collision response
-                    sf::Vector2f relativeVel = droplets[i].velocity - droplets[j].velocity;
-                    float impulse = -(1 + DAMPING) * (relativeVel.x * normal.x + relativeVel.y * normal.y);
-
-                    // Apply impulse
-                    droplets[i].velocity += normal * impulse * 0.5f;
-                    droplets[j].velocity -= normal * impulse * 0.5f;
-                }
-            }
-        }
-
-        // Render stuff
         window.clear();
         window.draw(border);
-        for (const auto& droplet : droplets) {
-            window.draw(droplet.shape);
-        }
+        simulator.draw(window);
         window.display();
     }
 
