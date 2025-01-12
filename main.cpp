@@ -83,38 +83,57 @@ private:
         }
     }
 
-    void computeForces() {
-        for (auto& pi : particles) {
-            sf::Vector2f pressure_force(0.f, 0.f);
-            sf::Vector2f viscosity_force(0.f, 0.f);
+   void computeForces() {
+    for (auto& pi : particles) {
+        sf::Vector2f pressure_force(0.f, 0.f);
+        sf::Vector2f viscosity_force(0.f, 0.f);
 
-            for (auto& pj : particles) {
-                if (&pi == &pj) continue;
+        for (auto& pj : particles) {
+            if (&pi == &pj) continue;
 
-                sf::Vector2f diff = pi.position - pj.position;
-                float r = std::sqrt(diff.x * diff.x + diff.y * diff.y);
+            sf::Vector2f diff = pi.position - pj.position;
+            float r = std::sqrt(diff.x * diff.x + diff.y * diff.y);
 
-                if (r < SMOOTHING_LENGTH && r > 0.0001f) { // Added minimum distance check
-                    // Pressure force
-                    float pressure_scale = (pi.pressure + pj.pressure) / (2.f * pi.density * pj.density);
-                    sf::Vector2f normalized_diff = diff / r;
-                    pressure_force += normalized_diff * (PARTICLE_MASS * pressure_scale *
-                        SPIKY_GRAD_SCALE * std::pow(SMOOTHING_LENGTH - r, 2.f));
+            if (r < SMOOTHING_LENGTH && r > 0.0001f) { // Added minimum distance check
+                // Pressure force
+                float pressure_scale = (pi.pressure + pj.pressure) / (2.f * pi.density * pj.density);
+                sf::Vector2f normalized_diff = diff / r;
+                pressure_force += normalized_diff * (PARTICLE_MASS * pressure_scale *
+                    SPIKY_GRAD_SCALE * std::pow(SMOOTHING_LENGTH - r, 2.f));
 
-                    // Viscosity force
-                    viscosity_force += (pj.velocity - pi.velocity) *
-                        (PARTICLE_MASS * VISCOSITY / pj.density * VISC_LAP_SCALE * (SMOOTHING_LENGTH - r));
-                }
+                // Viscosity force
+                viscosity_force += (pj.velocity - pi.velocity) *
+                    (PARTICLE_MASS * VISCOSITY / pj.density * VISC_LAP_SCALE * (SMOOTHING_LENGTH - r));
             }
 
-            // Limit force magnitude
-            pi.force = pressure_force + viscosity_force + gravity * pi.density;
-            float force_magnitude = std::sqrt(pi.force.x * pi.force.x + pi.force.y * pi.force.y);
-            if (force_magnitude > MAX_VELOCITY * pi.density) {
-                pi.force *= (MAX_VELOCITY * pi.density / force_magnitude);
+            // Check for overlap (distance between particles < 2 * radius)
+            if (r < 2 * PARTICLE_RADIUS) {
+                // Repulsion force: Push the particles apart
+                float overlap = 2 * PARTICLE_RADIUS - r; // Amount of overlap
+                sf::Vector2f normalized_diff = diff / r; // Normalize the direction
+                float repulsion_strength = 100.f; // Strength of the collision force
+
+                // Push particles apart
+                pi.position += normalized_diff * overlap * 0.5f; // Move pi away
+                pj.position -= normalized_diff * overlap * 0.5f; // Move pj away
+
+                // Apply a force to simulate the collision response (bounciness)
+                sf::Vector2f collision_force = normalized_diff * (overlap * repulsion_strength);
+                pi.force += collision_force;
+                pj.force -= collision_force;
             }
         }
+
+        // Combine all forces: pressure, viscosity, and gravity
+        pi.force = pressure_force + viscosity_force + gravity * pi.density;
+
+        // Limit force magnitude
+        float force_magnitude = std::sqrt(pi.force.x * pi.force.x + pi.force.y * pi.force.y);
+        if (force_magnitude > MAX_VELOCITY * pi.density) {
+            pi.force *= (MAX_VELOCITY * pi.density / force_magnitude);
+        }
     }
+}
 
     void integrate(float dt) {
         const float DAMPING = 0.4f;
