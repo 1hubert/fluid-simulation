@@ -22,18 +22,17 @@ private:
     sf::FloatRect bounds;
     std::vector<Particle> particles;
 
-    // Adjusted physics constants for more stable simulation
-    const float PARTICLE_MASS = 100.0f;          // Reduced from 100.0f
-    const float REST_DENSITY = 50.f;           // Reduced from 100.f
-    const float GAS_CONSTANT = 100.f;           // Reduced from 20.f
-    const float VISCOSITY = 7000.f;               // Reduced from 2.f
-    const float SMOOTHING_LENGTH = 15.f;       // Adjusted from 13.f
-    const float PARTICLE_RADIUS = 5.f;         // Made explicit for collision
+    const float PARTICLE_MASS = 100.0f;
+    const float REST_DENSITY = 50.f;
+    const float GAS_CONSTANT = 100.f;
+    const float VISCOSITY = 7000.f;
+    const float SMOOTHING_LENGTH = 15.f;
+    const float PARTICLE_RADIUS = 5.f;
     const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH;
     const float POLY6_SCALE = 315.f / (64.f * static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 9));
     const float SPIKY_GRAD_SCALE = -45.f / (static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 6));
     const float VISC_LAP_SCALE = 45.f / (static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 6));
-    const float MAX_VELOCITY = 300.f;          // Added velocity clamping
+    const float MAX_VELOCITY = 300.f;
 
 public:
     FluidSimulator(const sf::FloatRect& boundsRect, const sf::Vector2f& gravityVec = sf::Vector2f(0.f, 981.f))
@@ -118,7 +117,7 @@ private:
     }
 
     void integrate(float dt) {
-        const float DAMPING = 0.4f;  // Increased from 0.2f
+        const float DAMPING = 0.4f;
 
         for (auto& p : particles) {
             // Update velocity with force
