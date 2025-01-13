@@ -2,10 +2,16 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
+
+// todo
+// fps counter
+// comment where navier stokes eq is
+// add wind
 
 struct Particle {
     sf::CircleShape shape;
-    sf::Vector2f position;
+    sf::Vector2f position; // could be used to prevent overlaps
     sf::Vector2f velocity;
     sf::Vector2f force;
     float density;
@@ -28,10 +34,10 @@ private:
     const float VISCOSITY = 7000.f;
     const float SMOOTHING_LENGTH = 15.f;
     const float PARTICLE_RADIUS = 5.f;
-    const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH;
-    const float POLY6_SCALE = 315.f / (64.f * static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 9));
-    const float SPIKY_GRAD_SCALE = -45.f / (static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 6));
-    const float VISC_LAP_SCALE = 45.f / (static_cast<float>(M_PI) * std::pow(SMOOTHING_LENGTH, 6));
+    const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH; // is it called a kernel?
+    const float POLY6_SCALE = 315.f / (64.f * M_PI * std::pow(SMOOTHING_LENGTH, 9));
+    const float SPIKY_GRAD_SCALE = -45.f / (M_PI * std::pow(SMOOTHING_LENGTH, 6));
+    const float VISC_LAP_SCALE = 45.f / (M_PI * std::pow(SMOOTHING_LENGTH, 6));
     const float MAX_VELOCITY = 300.f;
 
 public:
@@ -67,6 +73,32 @@ public:
         }
     }
 
+    void checkSquareCollision(sf::RectangleShape& square) {
+        for (auto& p : particles) {
+            sf::FloatRect particleBounds(p.position.x - PARTICLE_RADIUS, p.position.y - PARTICLE_RADIUS, PARTICLE_RADIUS * 2, PARTICLE_RADIUS * 2);
+            if (square.getGlobalBounds().intersects(particleBounds)) {
+                // Calculate the vector from the particle to the closest point on the square
+                sf::Vector2f closestPoint = square.getPosition();
+                if (p.position.x < closestPoint.x) closestPoint.x = square.getPosition().x;
+                if (p.position.x > closestPoint.x + square.getSize().x) closestPoint.x = square.getPosition().x + square.getSize().x;
+                if (p.position.y < closestPoint.y) closestPoint.y = square.getPosition().y;
+                if (p.position.y > closestPoint.y + square.getSize().y) closestPoint.y = square.getPosition().y + square.getSize().y;
+
+                sf::Vector2f collisionVector = p.position - closestPoint;
+                float collisionDistance = std::sqrt(collisionVector.x * collisionVector.x + collisionVector.y * collisionVector.y);
+                if (collisionDistance < PARTICLE_RADIUS) {
+                    // Repulsion force: Move the particle away from the square
+                    sf::Vector2f pushBack = collisionVector / collisionDistance * (PARTICLE_RADIUS - collisionDistance);
+                    p.position += pushBack;
+
+                    // Apply the repulsion force in the particle's force
+                    sf::Vector2f repulsionForce = collisionVector / collisionDistance * (PARTICLE_RADIUS - collisionDistance) * 100.f;  // Adjust strength here
+                    p.force += repulsionForce;
+                }
+            }
+        }
+    }
+
 private:
     void computeDensityPressure() {
         for (auto& pi : particles) {
@@ -83,57 +115,57 @@ private:
         }
     }
 
-   void computeForces() {
-    for (auto& pi : particles) {
-        sf::Vector2f pressure_force(0.f, 0.f);
-        sf::Vector2f viscosity_force(0.f, 0.f);
+    void computeForces() {
+        for (auto& pi : particles) {
+            sf::Vector2f pressure_force(0.f, 0.f);
+            sf::Vector2f viscosity_force(0.f, 0.f);
 
-        for (auto& pj : particles) {
-            if (&pi == &pj) continue;
+            for (auto& pj : particles) {
+                if (&pi == &pj) continue;
 
-            sf::Vector2f diff = pi.position - pj.position;
-            float r = std::sqrt(diff.x * diff.x + diff.y * diff.y);
+                sf::Vector2f diff = pi.position - pj.position;
+                float r = std::sqrt(diff.x * diff.x + diff.y * diff.y);
 
-            if (r < SMOOTHING_LENGTH && r > 0.0001f) { // Added minimum distance check
-                // Pressure force
-                float pressure_scale = (pi.pressure + pj.pressure) / (2.f * pi.density * pj.density);
-                sf::Vector2f normalized_diff = diff / r;
-                pressure_force += normalized_diff * (PARTICLE_MASS * pressure_scale *
-                    SPIKY_GRAD_SCALE * std::pow(SMOOTHING_LENGTH - r, 2.f));
+                if (r < SMOOTHING_LENGTH && r > 0.0001f) {
+                    // Pressure force
+                    float pressure_scale = (pi.pressure + pj.pressure) / (2.f * pi.density * pj.density);
+                    sf::Vector2f normalized_diff = diff / r;
+                    pressure_force += normalized_diff * (PARTICLE_MASS * pressure_scale *
+                        SPIKY_GRAD_SCALE * std::pow(SMOOTHING_LENGTH - r, 2.f));
 
-                // Viscosity force
-                viscosity_force += (pj.velocity - pi.velocity) *
-                    (PARTICLE_MASS * VISCOSITY / pj.density * VISC_LAP_SCALE * (SMOOTHING_LENGTH - r));
+                    // Viscosity force
+                    viscosity_force += (pj.velocity - pi.velocity) *
+                        (PARTICLE_MASS * VISCOSITY / pj.density * VISC_LAP_SCALE * (SMOOTHING_LENGTH - r));
+                }
+
+                // Check for overlap (distance between particles < 2 * radius)
+                if (r < 2 * PARTICLE_RADIUS) {
+                    // Repulsion force: Push the particles apart
+                    float overlap = 2 * PARTICLE_RADIUS - r; // Amount of overlap
+                    sf::Vector2f normalized_diff = diff / r; // Normalize the direction
+                    float repulsion_strength = 100.f; // Strength of the collision force
+
+                    // Push particles apart
+                    pi.position += normalized_diff * overlap * 0.5f; // Move pi away
+                    pj.position -= normalized_diff * overlap * 0.5f; // Move pj away
+
+                    // Apply a force to simulate the collision response (bounciness)
+                    sf::Vector2f collision_force = normalized_diff * (overlap * repulsion_strength);
+                    pi.force += collision_force;
+                    pj.force -= collision_force;
+                }
             }
 
-            // Check for overlap (distance between particles < 2 * radius)
-            if (r < 2 * PARTICLE_RADIUS) {
-                // Repulsion force: Push the particles apart
-                float overlap = 2 * PARTICLE_RADIUS - r; // Amount of overlap
-                sf::Vector2f normalized_diff = diff / r; // Normalize the direction
-                float repulsion_strength = 100.f; // Strength of the collision force
+            // Combine all forces: pressure, viscosity, and gravity
+            pi.force = pressure_force + viscosity_force + gravity * pi.density;
 
-                // Push particles apart
-                pi.position += normalized_diff * overlap * 0.5f; // Move pi away
-                pj.position -= normalized_diff * overlap * 0.5f; // Move pj away
-
-                // Apply a force to simulate the collision response (bounciness)
-                sf::Vector2f collision_force = normalized_diff * (overlap * repulsion_strength);
-                pi.force += collision_force;
-                pj.force -= collision_force;
+            // Limit force magnitude
+            float force_magnitude = std::sqrt(pi.force.x * pi.force.x + pi.force.y * pi.force.y);
+            if (force_magnitude > MAX_VELOCITY * pi.density) {
+                pi.force *= (MAX_VELOCITY * pi.density / force_magnitude);
             }
-        }
-
-        // Combine all forces: pressure, viscosity, and gravity
-        pi.force = pressure_force + viscosity_force + gravity * pi.density;
-
-        // Limit force magnitude
-        float force_magnitude = std::sqrt(pi.force.x * pi.force.x + pi.force.y * pi.force.y);
-        if (force_magnitude > MAX_VELOCITY * pi.density) {
-            pi.force *= (MAX_VELOCITY * pi.density / force_magnitude);
         }
     }
-}
 
     void integrate(float dt) {
         const float DAMPING = 0.4f;
@@ -172,14 +204,14 @@ private:
     }
 };
 
-// Main function remains the same
 int main() {
     sf::RenderWindow window(
         sf::VideoMode(800, 600),
-        "SPH Fluid Simulation",
+        "Fluid Sim",
         sf::Style::Titlebar | sf::Style::Close
     );
     window.setFramerateLimit(60);
+    const float DELTA_TIME = 1.f / 60.f;
 
     const float BORDER_PADDING = 20.f;
     const float BORDER_THICKNESS = 4.f;
@@ -202,7 +234,7 @@ int main() {
 
     FluidSimulator simulator(bounds);
 
-    const int GRID_SIZE = 30;
+    const int GRID_SIZE = 20;
     const float SPACING = 12.f;
     const float startX = bounds.left + bounds.width * 0.25f;
     const float startY = bounds.top + bounds.height * 0.25f;
@@ -216,7 +248,11 @@ int main() {
         }
     }
 
-    sf::Clock clock;
+    // Create the movable square
+    sf::RectangleShape movableSquare(sf::Vector2f(50.f, 50.f));
+    movableSquare.setFillColor(sf::Color::Green);
+    movableSquare.setPosition(200.f, 200.f); // Initial position
+
     while (window.isOpen()) {
         sf::Event event;
         while (window.pollEvent(event)) {
@@ -228,16 +264,28 @@ int main() {
                     if (event.key.code == sf::Keyboard::Q)
                         window.close();
                     break;
-
-
             }
         }
 
-        float dt = std::min(clock.restart().asSeconds(), 1.f / 60.f);
-        simulator.update(dt);
+        // Move the square based on mouse position
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+            sf::Vector2i mousePosition = sf::Mouse::getPosition(window);
+            // Constrain square within the border
+            sf::Vector2f newPos(
+                std::clamp(static_cast<float>(mousePosition.x) - movableSquare.getSize().x / 2.f,
+                bounds.left, bounds.left + bounds.width - movableSquare.getSize().x),
+                std::clamp(static_cast<float>(mousePosition.y) - movableSquare.getSize().y / 2.f,
+                bounds.top, bounds.top + bounds.height - movableSquare.getSize().y)
+            );
+            movableSquare.setPosition(newPos);
+        }
 
+        simulator.checkSquareCollision(movableSquare);
+
+        simulator.update(DELTA_TIME);
         window.clear();
         window.draw(border);
+        window.draw(movableSquare);
         simulator.draw(window);
         window.display();
     }
