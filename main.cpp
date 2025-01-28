@@ -18,6 +18,89 @@
 
 bool show_menu = true;
 
+class Slider {
+private:
+    sf::RectangleShape track;
+    sf::CircleShape knob;
+    sf::Font font;
+    sf::Text valueText;
+    sf::Text NameText;
+
+    float trackStartX, trackEndX;
+    int minValue, maxValue;
+    int currentValue;
+    bool isDragging = false;
+public:
+    Slider(float x, float y, float width, int minValue, int maxValue, std::string name)
+        : minValue(minValue), maxValue(maxValue), currentValue(minValue) {
+        // Set up the track
+        track.setSize(sf::Vector2f(width, 5));
+        track.setFillColor(sf::Color::White);
+        track.setPosition(x, y);
+
+        // Set up the knob
+        knob.setRadius(10);
+        knob.setFillColor(sf::Color::Red);
+        knob.setOrigin(knob.getRadius(), knob.getRadius());
+        knob.setPosition(x, y + track.getSize().y / 2);
+
+        // Calculate the bounds
+        trackStartX = x;
+        trackEndX = x + width;
+
+        // Load the font for text
+        if (!font.loadFromFile("./resources/tuffy.ttf")) { // Ensure you have a font file in your project directory
+            std::cerr << "Failed to load font\n";
+        }
+
+        // Value display
+        valueText.setFont(font);
+        valueText.setCharacterSize(16);
+        valueText.setFillColor(sf::Color::White);
+        valueText.setString(std::to_string(currentValue));
+        valueText.setPosition(x + width + 20, y - 5);
+
+        // Name
+        NameText.setFont(font);
+        NameText.setCharacterSize(21);
+        NameText.setFillColor(sf::Color::White);
+        NameText.setString(name);
+        NameText.setPosition(x + width/3, y - 36);
+    }
+
+    void handleEvent(const sf::Event& event, const sf::RenderWindow& window) {
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            sf::Vector2f mousePos(event.mouseButton.x, event.mouseButton.y);
+            if (knob.getGlobalBounds().contains(mousePos)) {
+                isDragging = true;
+            }
+        } else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+            isDragging = false;
+        } else if (event.type == sf::Event::MouseMoved && isDragging) {
+            float mouseX = static_cast<float>(event.mouseMove.x);
+            if (mouseX < trackStartX) mouseX = trackStartX;
+            if (mouseX > trackEndX) mouseX = trackEndX;
+            knob.setPosition(mouseX, knob.getPosition().y);
+
+            // Map mouseX to the range of minValue to maxValue
+            float percentage = (mouseX - trackStartX) / (trackEndX - trackStartX);
+            currentValue = static_cast<int>(minValue + percentage * (maxValue - minValue));
+            valueText.setString(std::to_string(currentValue));
+        }
+    }
+
+    void draw(sf::RenderWindow& window) {
+        window.draw(track);
+        window.draw(knob);
+        window.draw(valueText);
+        window.draw(NameText);
+    }
+
+    int getValue() const {
+        return currentValue;
+    }
+};
+
 class Button {
 private:
     sf::RectangleShape shape;
@@ -443,13 +526,14 @@ int main() {
     // Button setup
     Button button_start(300, 200, 200, 50, "Start", font);
     Button button_reset(300, 260, 200, 50, "Reset", font);
+    Slider slider_gridsize(300, 320, 200, 1, 35, "Grid Size");
 
-    button_start.setCallback([&show_menu, &bounds, &simulator, &button_reset, &button_start]() {
+    button_start.setCallback([&show_menu, &bounds, &simulator, &button_reset, &button_start, &slider_gridsize]() {
         show_menu = false;
         button_reset.setEnabled(true);
         button_start.setEnabled(false);
 
-        const int GRID_SIZE = 30;
+        const int GRID_SIZE = slider_gridsize.getValue();
         const float SPACING = 12.f;
         const float startX = bounds.left + bounds.width * 0.25f;
         const float startY = bounds.top + bounds.height * 0.25f;
@@ -475,6 +559,7 @@ int main() {
     while (window.isOpen()) {
         sf::Event event;
         while (window.pollEvent(event)) {
+            slider_gridsize.handleEvent(event, window);
             switch (event.type) {
                 case sf::Event::Closed:
                     window.close();
@@ -536,6 +621,7 @@ int main() {
 
         if (show_menu) {
             button_start.draw(window);
+            slider_gridsize.draw(window);
         } else {
             simulator.update(DELTA_TIME);
             simulator.draw(window);
