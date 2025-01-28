@@ -8,9 +8,11 @@
 #include <iomanip>
 #include <time.h>
 
-// todo
-// add wind
-// przede wszystkim zrobi� parametryzacj� jak mieszko zrobi�
+
+// add wind and spacebar shake
+// startup menu with parametrization for grid size
+// press r to reset and return to menu
+
 
 struct Particle {
     sf::CircleShape shape;
@@ -76,7 +78,7 @@ public:
     // Optional: Draw FPS counter directly to window
     void draw(sf::RenderWindow& window, const sf::Font& font,
              unsigned int characterSize = 20,
-             sf::Vector2f position = sf::Vector2f(10, 10)) {
+             sf::Vector2f position = sf::Vector2f(27, 25)) {
         sf::Text text;
         text.setFont(font);
         text.setString(getFPSString());
