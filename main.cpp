@@ -10,9 +10,8 @@
 #include <functional>
 
 
-// add wind and spacebar shake
+// onclick square /w collision
 // parametrization for grid size
-// press r to reset and return to menu
 
 // CTRL+SHIFT+C to comment
 // CTRL+SHIFT+X to UNcomment
@@ -26,24 +25,21 @@ private:
     sf::Font font;
     bool enabled = true;
     std::function<void()> callback;
-
 public:
     Button(float x, float y, float width, float height, const std::string& label, const sf::Font& font) {
-        // Ustawienia kształtu przycisku
         shape.setPosition(x, y);
         shape.setSize(sf::Vector2f(width, height));
         shape.setFillColor(sf::Color::Blue);
         shape.setOutlineColor(sf::Color::Black);
         shape.setOutlineThickness(2);
 
-        // Ustawienia tekstu
         this->font = font;
         text.setFont(this->font);
         text.setString(label);
         text.setCharacterSize(20);
         text.setFillColor(sf::Color::White);
 
-        // Centrowanie tekstu wewnątrz przycisku
+        // Center text
         sf::FloatRect textBounds = text.getLocalBounds();
         text.setOrigin(textBounds.left + textBounds.width / 2.0f, textBounds.top + textBounds.height / 2.0f);
         text.setPosition(x + width / 2.0f, y + height / 2.0f);
@@ -66,7 +62,7 @@ public:
         if (enabled && event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             sf::Vector2i mousePos = sf::Mouse::getPosition(window);
             if (shape.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos))) {
-                if (callback) callback(); // Wywołaj funkcję przypisaną do przycisku
+                if (callback) callback(); // Run the given function
             }
         }
     }
@@ -287,8 +283,6 @@ private:
 
 
             pi.pressure = GAS_CONSTANT * (pi.density - REST_DENSITY);
-            //std::cout << pi.pressure << std::endl;
-            //std::cout << "Particle Density: " << pi.density << ", Pressure: " << pi.pressure << std::endl;
         }
     }
 
@@ -331,7 +325,7 @@ private:
                         // Coefficient of restitution (1.0 = perfectly elastic)
                         const float RESTITUTION = 0.8f;
 
-                        // Calculate impulse scalar
+                        // Calculate impulse
                         float impulse = -(1.0f + RESTITUTION) * normal_velocity;
                         impulse /= 2.0f; // Assuming equal mass for both particles
 
@@ -438,15 +432,14 @@ int main() {
         window.getSize().y - 2 * (BORDER_PADDING + BORDER_THICKNESS)
     );
 
-
-
-
-
     // Square setup
 //    sf::RectangleShape movableSquare(sf::Vector2f(50.f, 50.f));
 //    movableSquare.setFillColor(sf::Color::Green);
 //    movableSquare.setPosition(200.f, 200.f); // Initial position
+
+    // Define FluidSimulator
     FluidSimulator simulator(bounds);
+
     // Button setup
     Button button_start(300, 200, 200, 50, "Start", font);
     Button button_reset(300, 260, 200, 50, "Reset", font);
@@ -456,23 +449,19 @@ int main() {
         button_reset.setEnabled(true);
         button_start.setEnabled(false);
 
-            // Fluid Simulator Setup
-    //FluidSimulator simulator(bounds);
+        const int GRID_SIZE = 30;
+        const float SPACING = 12.f;
+        const float startX = bounds.left + bounds.width * 0.25f;
+        const float startY = bounds.top + bounds.height * 0.25f;
 
-    const int GRID_SIZE = 30;
-    const float SPACING = 12.f;
-    const float startX = bounds.left + bounds.width * 0.25f;
-    const float startY = bounds.top + bounds.height * 0.25f;
-
-    for (int row = 0; row < GRID_SIZE; row++) {
-        for (int col = 0; col < GRID_SIZE; col++) {
-            simulator.addParticle(sf::Vector2f(
-                startX + col * SPACING - 1 + (rand() % 3),
-                startY + row * SPACING - 1 + (rand() % 3)
-            ));
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                simulator.addParticle(sf::Vector2f(
+                    startX + col * SPACING - 1 + (rand() % 3),
+                    startY + row * SPACING - 1 + (rand() % 3)
+                ));
+            }
         }
-    }
-
     });
 
     button_reset.setCallback([&show_menu, &simulator, &button_reset, &button_start]() {
@@ -482,7 +471,6 @@ int main() {
 
         simulator.removeAllParticles();
     });
-
 
     while (window.isOpen()) {
         sf::Event event;
@@ -511,12 +499,16 @@ int main() {
                     case sf::Keyboard::Left:
                         simulator.wind(3, 10.f);
                         break;
+                    default:
+                        break;
                     }
 
                     break;
                 case sf::Event::MouseButtonPressed:
                     button_start.handleEvent(event, window);
                     button_reset.handleEvent(event, window);
+                    break;
+                default:
                     break;
             }
         }
