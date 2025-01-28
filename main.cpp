@@ -7,11 +7,69 @@
 #include <sstream>
 #include <iomanip>
 #include <time.h>
+#include <functional>
 
 
 // add wind and spacebar shake
 // startup menu with parametrization for grid size
 // press r to reset and return to menu
+
+
+class Button {
+private:
+    sf::RectangleShape shape;
+    sf::Text text;
+    sf::Font font;
+    std::function<void()> callback; // Funkcja wywoływana po kliknięciu
+
+public:
+    Button(float x, float y, float width, float height, const std::string& label, const sf::Font& font) {
+        // Ustawienia kształtu przycisku
+        shape.setPosition(x, y);
+        shape.setSize(sf::Vector2f(width, height));
+        shape.setFillColor(sf::Color::Blue);
+        shape.setOutlineColor(sf::Color::Black);
+        shape.setOutlineThickness(2);
+
+        // Ustawienia tekstu
+        this->font = font;
+        text.setFont(this->font);
+        text.setString(label);
+        text.setCharacterSize(20);
+        text.setFillColor(sf::Color::White);
+
+        // Centrowanie tekstu wewnątrz przycisku
+        sf::FloatRect textBounds = text.getLocalBounds();
+        text.setOrigin(textBounds.left + textBounds.width / 2.0f, textBounds.top + textBounds.height / 2.0f);
+        text.setPosition(x + width / 2.0f, y + height / 2.0f);
+    }
+
+    void setCallback(const std::function<void()>& func) {
+        callback = func;
+    }
+
+    void draw(sf::RenderWindow& window) {
+        window.draw(shape);
+        window.draw(text);
+    }
+
+    void handleEvent(const sf::Event& event, const sf::RenderWindow& window) {
+        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+            if (shape.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos))) {
+                if (callback) callback(); // Wywołaj funkcję przypisaną do przycisku
+            }
+        }
+    }
+
+    void setFillColor(const sf::Color& color) {
+        shape.setFillColor(color);
+    }
+
+    void setTextColor(const sf::Color& color) {
+        text.setFillColor(color);
+    }
+};
 
 
 struct Particle {
@@ -37,7 +95,6 @@ private:
     sf::Clock clock;
     sf::Time previousTime;
 
-    // For smoothing
     static const int SAMPLE_SIZE = 10;
     std::array<float, SAMPLE_SIZE> fpsHistory;
     int currentSample = 0;
@@ -68,14 +125,12 @@ public:
         fps = sum / SAMPLE_SIZE;
     }
 
-    // Get FPS as formatted string
     std::string getFPSString() const {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(1) << fps << " FPS";
         return ss.str();
     }
 
-    // Optional: Draw FPS counter directly to window
     void draw(sf::RenderWindow& window, const sf::Font& font,
              unsigned int characterSize = 20,
              sf::Vector2f position = sf::Vector2f(27, 25)) {
@@ -141,12 +196,9 @@ void draw(sf::RenderWindow& window) {
         // Normalize pressure between 0 and 1
         float pressure_scale = p.pressure / max_pressure;
 
-        // Apply smoothstep for more pleasing color transitions
-        pressure_scale = pressure_scale * pressure_scale * (3 - 2 * pressure_scale);
-
         // Create a color gradient from blue (low pressure) to red (high pressure)
         sf::Color color(
-            static_cast<sf::Uint8>(255 * pressure_scale),                    // Red
+            static_cast<sf::Uint8>(200 * pressure_scale),                    // Red
             static_cast<sf::Uint8>(100 * (1.0f - pressure_scale)),          // Green
             static_cast<sf::Uint8>(255 * (1.0f - pressure_scale))           // Blue
         );
@@ -331,7 +383,7 @@ int main() {
     // Fluid Simulator Setup
     FluidSimulator simulator(bounds);
 
-    const int GRID_SIZE = 40;
+    const int GRID_SIZE = 30;
     const float SPACING = 12.f;
     const float startX = bounds.left + bounds.width * 0.25f;
     const float startY = bounds.top + bounds.height * 0.25f;
@@ -345,10 +397,17 @@ int main() {
         }
     }
 
-    // Create the movable square
+    // Square setup
     sf::RectangleShape movableSquare(sf::Vector2f(50.f, 50.f));
     movableSquare.setFillColor(sf::Color::Green);
     movableSquare.setPosition(200.f, 200.f); // Initial position
+
+    // Button setup
+    Button myButton(300, 200, 200, 50, "Kliknij mnie", font);
+    myButton.setCallback([]() {
+        std::cout << "lets go" << std::endl;
+    });
+
 
     while (window.isOpen()) {
         sf::Event event;
@@ -360,6 +419,9 @@ int main() {
                 case sf::Event::KeyPressed:
                     if (event.key.code == sf::Keyboard::Q)
                         window.close();
+                    break;
+                case sf::Event::MouseButtonPressed:
+                    myButton.handleEvent(event, window);
                     break;
             }
         }
@@ -385,6 +447,7 @@ int main() {
         window.draw(movableSquare);
         fps_counter.draw(window, font);
         simulator.draw(window);
+        myButton.draw(window);
         window.display();
     }
 
