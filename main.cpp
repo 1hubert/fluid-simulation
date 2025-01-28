@@ -3,9 +3,11 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <array>
+#include <sstream>
+#include <iomanip>
 
 // todo
-// fps counter
 // add wind
 // przede wszystkim zrobi� parametryzacj� jak mieszko zrobi�
 
@@ -34,6 +36,68 @@ struct Particle {
 float dot(const sf::Vector2f& a, const sf::Vector2f& b) {
     return a.x * b.x + a.y * b.y;
 }
+
+class FPSCounter {
+private:
+    float fps;
+    sf::Clock clock;
+    sf::Time previousTime;
+
+    // For smoothing
+    static const int SAMPLE_SIZE = 10;
+    std::array<float, SAMPLE_SIZE> fpsHistory;
+    int currentSample = 0;
+
+public:
+    FPSCounter() : fps(0.0f), currentSample(0) {
+        previousTime = clock.getElapsedTime();
+        fpsHistory.fill(0.0f);
+    }
+
+    void update() {
+        sf::Time currentTime = clock.getElapsedTime();
+        sf::Time deltaTime = currentTime - previousTime;
+        previousTime = currentTime;
+
+        // Calculate instantaneous fps
+        float currentFps = 1.0f / deltaTime.asSeconds();
+
+        // Store in circular buffer
+        fpsHistory[currentSample] = currentFps;
+        currentSample = (currentSample + 1) % SAMPLE_SIZE;
+
+        // Calculate average fps
+        float sum = 0.0f;
+        for (float sample : fpsHistory) {
+            sum += sample;
+        }
+        fps = sum / SAMPLE_SIZE;
+    }
+
+    float getFPS() const {
+        return fps;
+    }
+
+    // Get FPS as formatted string
+    std::string getFPSString() const {
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(1) << fps << " FPS";
+        return ss.str();
+    }
+
+    // Optional: Draw FPS counter directly to window
+    void draw(sf::RenderWindow& window, const sf::Font& font,
+             unsigned int characterSize = 20,
+             sf::Vector2f position = sf::Vector2f(10, 10)) {
+        sf::Text text;
+        text.setFont(font);
+        text.setString(getFPSString());
+        text.setCharacterSize(characterSize);
+        text.setFillColor(sf::Color::White);
+        text.setPosition(position);
+        window.draw(text);
+    }
+};
 
 class FluidSimulator {
 private:
@@ -247,6 +311,10 @@ int main() {
     window.setFramerateLimit(60);
     const float DELTA_TIME = 1.f / 60.f;
 
+    sf::Font font;
+    font.loadFromFile("./resources/tuffy.ttf");
+    FPSCounter fps_counter;
+
     const float BORDER_PADDING = 20.f;
     const float BORDER_THICKNESS = 4.f;
     sf::RectangleShape border;
@@ -315,11 +383,13 @@ int main() {
         }
 
         simulator.checkSquareCollision(movableSquare);
-
+        fps_counter.update();
         simulator.update(DELTA_TIME);
         window.clear();
         window.draw(border);
         window.draw(movableSquare);
+        fps_counter.draw(window, font);
+        //std::cout << fps_counter.getFPS() << std::endl;
         simulator.draw(window);
         window.display();
     }
