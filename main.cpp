@@ -11,16 +11,21 @@
 
 
 // add wind and spacebar shake
-// startup menu with parametrization for grid size
+// parametrization for grid size
 // press r to reset and return to menu
 
+// CTRL+SHIFT+C to comment
+// CTRL+SHIFT+X to UNcomment
+
+bool show_menu = true;
 
 class Button {
 private:
     sf::RectangleShape shape;
     sf::Text text;
     sf::Font font;
-    std::function<void()> callback; // Funkcja wywoływana po kliknięciu
+    bool enabled = true;
+    std::function<void()> callback;
 
 public:
     Button(float x, float y, float width, float height, const std::string& label, const sf::Font& font) {
@@ -48,13 +53,17 @@ public:
         callback = func;
     }
 
+    void setEnabled(bool value) {
+        enabled = value;
+    }
+
     void draw(sf::RenderWindow& window) {
         window.draw(shape);
         window.draw(text);
     }
 
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window) {
-        if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+        if (enabled && event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
             sf::Vector2i mousePos = sf::Mouse::getPosition(window);
             if (shape.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos))) {
                 if (callback) callback(); // Wywołaj funkcję przypisaną do przycisku
@@ -175,10 +184,60 @@ public:
         particles.push_back(p);
     }
 
+    void removeAllParticles() {
+
+        particles.clear();
+    }
+
     void update(float dt) {
         computeDensityPressure();
         computeForces();
         integrate(dt);
+    }
+
+    void shake() {
+        for (auto& p : particles) {
+                switch(rand() % 4) {
+                case 0:
+                    p.velocity += sf::Vector2f(0.f, static_cast<float>(rand() % 10000));
+                    break;
+                case 1:
+                    p.velocity += sf::Vector2f(static_cast<float>(rand() % 10000), 0.f);
+                    break;
+                case 2:
+                    p.velocity += sf::Vector2f(0.f, -static_cast<float>(rand() % 10000));
+                    break;
+                case 3:
+                    p.velocity += sf::Vector2f(-static_cast<float>(rand() % 10000), 0.f);
+                    break;
+            }
+        }
+    }
+
+    void wind(int direction, float force) {
+        // 0123 - up right down left
+        switch(direction) {
+            case 0:
+                for (auto& p : particles) {
+                    p.velocity += sf::Vector2f(0.f, -force);
+                }
+                break;
+            case 1:
+                for (auto& p : particles) {
+                    p.velocity += sf::Vector2f(force, 0.f);
+                }
+                break;
+            case 2:
+                for (auto& p : particles) {
+                    p.velocity += sf::Vector2f(0.f, force);
+                }
+                break;
+            case 3:
+                for (auto& p : particles) {
+                    p.velocity += sf::Vector2f(-force, 0.f);
+                }
+                break;
+        }
     }
 
 void draw(sf::RenderWindow& window) {
@@ -329,8 +388,8 @@ private:
                 p.position.x = bounds.left + bounds.width - PARTICLE_RADIUS;
                 p.velocity.x *= -DAMPING;
             }
-            if (p.position.y - PARTICLE_RADIUS < bounds.top) {
-                p.position.y = bounds.top + PARTICLE_RADIUS;
+            if (p.position.y + PARTICLE_RADIUS < bounds.top) {
+                p.position.y = bounds.top - PARTICLE_RADIUS;
                 p.velocity.y *= -DAMPING;
             }
             if (p.position.y + PARTICLE_RADIUS > bounds.top + bounds.height) {
@@ -342,7 +401,7 @@ private:
 };
 
 int main() {
-    // Seed
+    // Seed rand
     srand(time(NULL));
 
     // SFML Window Setup
@@ -380,8 +439,25 @@ int main() {
     );
 
 
-    // Fluid Simulator Setup
+
+
+
+    // Square setup
+//    sf::RectangleShape movableSquare(sf::Vector2f(50.f, 50.f));
+//    movableSquare.setFillColor(sf::Color::Green);
+//    movableSquare.setPosition(200.f, 200.f); // Initial position
     FluidSimulator simulator(bounds);
+    // Button setup
+    Button button_start(300, 200, 200, 50, "Start", font);
+    Button button_reset(300, 260, 200, 50, "Reset", font);
+
+    button_start.setCallback([&show_menu, &bounds, &simulator, &button_reset, &button_start]() {
+        show_menu = false;
+        button_reset.setEnabled(true);
+        button_start.setEnabled(false);
+
+            // Fluid Simulator Setup
+    //FluidSimulator simulator(bounds);
 
     const int GRID_SIZE = 30;
     const float SPACING = 12.f;
@@ -397,15 +473,14 @@ int main() {
         }
     }
 
-    // Square setup
-    sf::RectangleShape movableSquare(sf::Vector2f(50.f, 50.f));
-    movableSquare.setFillColor(sf::Color::Green);
-    movableSquare.setPosition(200.f, 200.f); // Initial position
+    });
 
-    // Button setup
-    Button myButton(300, 200, 200, 50, "Kliknij mnie", font);
-    myButton.setCallback([]() {
-        std::cout << "lets go" << std::endl;
+    button_reset.setCallback([&show_menu, &simulator, &button_reset, &button_start]() {
+        show_menu = true;
+        button_reset.setEnabled(false);
+        button_start.setEnabled(true);
+
+        simulator.removeAllParticles();
     });
 
 
@@ -417,37 +492,66 @@ int main() {
                     window.close();
                     break;
                 case sf::Event::KeyPressed:
-                    if (event.key.code == sf::Keyboard::Q)
+                    switch(event.key.code) {
+                    case sf::Keyboard::Q:
                         window.close();
+                        break;
+                    case sf::Keyboard::Space:
+                        simulator.shake();
+                        break;
+                    case sf::Keyboard::Up:
+                        simulator.wind(0, 10.f);
+                        break;
+                    case sf::Keyboard::Right:
+                        simulator.wind(1, 10.f);
+                        break;
+                    case sf::Keyboard::Down:
+                        simulator.wind(2, 10.f);
+                        break;
+                    case sf::Keyboard::Left:
+                        simulator.wind(3, 10.f);
+                        break;
+                    }
+
                     break;
                 case sf::Event::MouseButtonPressed:
-                    myButton.handleEvent(event, window);
+                    button_start.handleEvent(event, window);
+                    button_reset.handleEvent(event, window);
                     break;
             }
         }
 
-        // Move the square based on mouse position
-        if (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
-            sf::Vector2i mousePosition = sf::Mouse::getPosition(window);
-            // Constrain square within the border
-            sf::Vector2f newPos(
-                std::clamp(static_cast<float>(mousePosition.x) - movableSquare.getSize().x / 2.f,
-                bounds.left, bounds.left + bounds.width - movableSquare.getSize().x),
-                std::clamp(static_cast<float>(mousePosition.y) - movableSquare.getSize().y / 2.f,
-                bounds.top, bounds.top + bounds.height - movableSquare.getSize().y)
-            );
-            movableSquare.setPosition(newPos);
+//         Move the square based on mouse position
+//        if (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+//            sf::Vector2i mousePosition = sf::Mouse::getPosition(window);
+//             Constrain square within the border
+//            sf::Vector2f newPos(
+//                std::clamp(static_cast<float>(mousePosition.x) - movableSquare.getSize().x / 2.f,
+//                bounds.left, bounds.left + bounds.width - movableSquare.getSize().x),
+//                std::clamp(static_cast<float>(mousePosition.y) - movableSquare.getSize().y / 2.f,
+//                bounds.top, bounds.top + bounds.height - movableSquare.getSize().y)
+//            );
+//            movableSquare.setPosition(newPos);
+//        }
+
+        fps_counter.update();
+
+        //simulator.checkSquareCollision(movableSquare);
+
+        window.clear();
+
+        //window.draw(movableSquare);
+
+        if (show_menu) {
+            button_start.draw(window);
+        } else {
+            simulator.update(DELTA_TIME);
+            simulator.draw(window);
+            button_reset.draw(window);
         }
 
-        simulator.checkSquareCollision(movableSquare);
-        fps_counter.update();
-        simulator.update(DELTA_TIME);
-        window.clear();
         window.draw(border);
-        window.draw(movableSquare);
         fps_counter.draw(window, font);
-        simulator.draw(window);
-        myButton.draw(window);
         window.display();
     }
 
