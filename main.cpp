@@ -6,8 +6,8 @@
 
 // todo
 // fps counter
-// comment where navier stokes eq is
 // add wind
+// przede wszystkim zrobi� parametryzacj� jak mieszko zrobi�
 
 struct Particle {
     sf::CircleShape shape;
@@ -17,10 +17,23 @@ struct Particle {
     float density;
     float pressure;
 
+        // Check if this particle intersects with another particle
+    bool intersects(const Particle& other) const {
+        float dx = position.x - other.position.x;
+        float dy = position.y - other.position.y;
+        float distanceSquared = dx * dx + dy * dy;
+        float minDistance = 2.f;
+        return distanceSquared < minDistance * minDistance;
+    }
     Particle(float radius) : shape(radius), density(0.f), pressure(0.f) {
         shape.setFillColor(sf::Color::Cyan);
     }
 };
+
+// Helper function for vector dot product
+float dot(const sf::Vector2f& a, const sf::Vector2f& b) {
+    return a.x * b.x + a.y * b.y;
+}
 
 class FluidSimulator {
 private:
@@ -34,7 +47,7 @@ private:
     const float VISCOSITY = 7000.f;
     const float SMOOTHING_LENGTH = 15.f;
     const float PARTICLE_RADIUS = 5.f;
-    const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH; // is it called a kernel?
+    const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH;
     const float POLY6_SCALE = 315.f / (64.f * M_PI * std::pow(SMOOTHING_LENGTH, 9));
     const float SPIKY_GRAD_SCALE = -45.f / (M_PI * std::pow(SMOOTHING_LENGTH, 6));
     const float VISC_LAP_SCALE = 45.f / (M_PI * std::pow(SMOOTHING_LENGTH, 6));
@@ -138,22 +151,43 @@ private:
                         (PARTICLE_MASS * VISCOSITY / pj.density * VISC_LAP_SCALE * (SMOOTHING_LENGTH - r));
                 }
 
-                // Check for overlap (distance between particles < 2 * radius)
-                if (r < 2 * PARTICLE_RADIUS) {
-                    // Repulsion force: Push the particles apart
-                    float overlap = 2 * PARTICLE_RADIUS - r; // Amount of overlap
-                    sf::Vector2f normalized_diff = diff / r; // Normalize the direction
-                    float repulsion_strength = 100.f; // Strength of the collision force
 
-                    // Push particles apart
-                    pi.position += normalized_diff * overlap * 0.5f; // Move pi away
-                    pj.position -= normalized_diff * overlap * 0.5f; // Move pj away
+// Check for overlap (distance between particles < 2 * radius)
+if (r < 2 * PARTICLE_RADIUS) {
+    sf::Vector2f normalized_diff = diff / r; // Collision normal
 
-                    // Apply a force to simulate the collision response (bounciness)
-                    sf::Vector2f collision_force = normalized_diff * (overlap * repulsion_strength);
-                    pi.force += collision_force;
-                    pj.force -= collision_force;
-                }
+    // Calculate relative velocity
+    sf::Vector2f relative_velocity = pi.velocity - pj.velocity;
+
+    // Normal velocity component (along collision normal)
+    float normal_velocity = dot(relative_velocity, normalized_diff);
+
+    // Only resolve if particles are moving toward each other
+    if (normal_velocity < 0) {
+        // Coefficient of restitution (1.0 = perfectly elastic)
+        const float RESTITUTION = 0.8f;
+
+        // Calculate impulse scalar
+        float impulse = -(1.0f + RESTITUTION) * normal_velocity;
+        impulse /= 2.0f; // Assuming equal mass for both particles
+
+        // Apply impulse
+        pi.velocity += normalized_diff * impulse;
+        pj.velocity -= normalized_diff * impulse;
+
+        // Separate particles to prevent overlap
+        float overlap = 2 * PARTICLE_RADIUS - r;
+        sf::Vector2f separation = normalized_diff * (overlap * 0.5f);
+        pi.position += separation;
+        pj.position -= separation;
+
+        // Clear forces since we're handling collision response through velocity
+        pi.force = sf::Vector2f(0.0f, 0.0f);
+        pj.force = sf::Vector2f(0.0f, 0.0f);
+    }
+}
+
+
             }
 
             // Combine all forces: pressure, viscosity, and gravity
@@ -234,7 +268,7 @@ int main() {
 
     FluidSimulator simulator(bounds);
 
-    const int GRID_SIZE = 20;
+    const int GRID_SIZE = 40;
     const float SPACING = 12.f;
     const float startX = bounds.left + bounds.width * 0.25f;
     const float startY = bounds.top + bounds.height * 0.25f;
