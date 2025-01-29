@@ -139,14 +139,6 @@ public:
             }
         }
     }
-
-    void setFillColor(const sf::Color& color) {
-        shape.setFillColor(color);
-    }
-
-    void setTextColor(const sf::Color& color) {
-        text.setFillColor(color);
-    }
 };
 
 
@@ -228,6 +220,8 @@ private:
     sf::FloatRect bounds;
     std::vector<Particle> particles;
 
+    const float VISCOSITY = 7000.f;
+    const float REST_DENSITY = 1000.f;
     const float GAS_CONSTANT = 100.f;
     const float SMOOTHING_LENGTH = 15.f;
     const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH;
@@ -235,12 +229,11 @@ private:
     const float SPIKY_GRAD_SCALE = -45.f / (3.14 * std::pow(SMOOTHING_LENGTH, 6));
     const float VISC_LAP_SCALE = 45.f / (3.14 * std::pow(SMOOTHING_LENGTH, 6));
 public:
-    float REST_DENSITY = 1000.f; //1000 works well
-    float DAMPING = 0.4f;
     float PARTICLE_RADIUS = 5.f;
-    float VISCOSITY = 7000.f;
-    float PARTICLE_MASS = 5.0f;
+    float DAMPING = 0.4f;
     float MAX_VELOCITY = 300.f;
+    float PARTICLE_MASS = 5.0f;
+
     FluidSimulator(const sf::FloatRect& boundsRect, const sf::Vector2f& gravityVec = sf::Vector2f(0.f, 981.f))
         : gravity(gravityVec), bounds(boundsRect) {}
 
