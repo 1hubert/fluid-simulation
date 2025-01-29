@@ -238,19 +238,19 @@ private:
     sf::FloatRect bounds;
     std::vector<Particle> particles;
 
-    const float PARTICLE_MASS = 5.0f;
-    const float REST_DENSITY = 1000.f;
     const float GAS_CONSTANT = 100.f;
-    const float VISCOSITY = 7000.f;
     const float SMOOTHING_LENGTH = 15.f;
-    const float PARTICLE_RADIUS = 5.f;
     const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH;
     const float POLY6_SCALE = 315.f / (64.f * M_PI * std::pow(SMOOTHING_LENGTH, 4));
     const float SPIKY_GRAD_SCALE = -45.f / (M_PI * std::pow(SMOOTHING_LENGTH, 6));
     const float VISC_LAP_SCALE = 45.f / (M_PI * std::pow(SMOOTHING_LENGTH, 6));
-    const float MAX_VELOCITY = 300.f;
-
 public:
+    float REST_DENSITY = 1000.f; //1000 works well
+    float DAMPING = 0.4f;
+    float PARTICLE_RADIUS = 5.f;
+    float VISCOSITY = 7000.f;
+    float PARTICLE_MASS = 5.0f;
+    float MAX_VELOCITY = 300.f;
     FluidSimulator(const sf::FloatRect& boundsRect, const sf::Vector2f& gravityVec = sf::Vector2f(0.f, 981.f))
         : gravity(gravityVec), bounds(boundsRect) {}
 
@@ -441,7 +441,6 @@ private:
     }
 
     void integrate(float dt) {
-        const float DAMPING = 0.4f;
 
         for (auto& p : particles) {
             // Update velocity with force
@@ -523,15 +522,25 @@ int main() {
     // Define FluidSimulator
     FluidSimulator simulator(bounds);
 
-    // Button setup
+    // Button & Slider setup
     Button button_start(300, 200, 200, 50, "Start", font);
     Button button_reset(300, 260, 200, 50, "Reset", font);
-    Slider slider_gridsize(300, 320, 200, 1, 35, "Grid Size");
+    Slider slider_gridsize(300, 300, 200, 1, 35, "Grid Size");
+    Slider slider_radius(300, 360, 200, 3, 10, "Particle Radius"); // default 5
+    Slider slider_viscosity(300, 420, 200, 0, 100, "Damping%"); // default 7000
+    Slider slider_max_velocity(300, 480, 200, 300, 1000, "Max Velocity"); // default 300
+    Slider slider_mass(300, 540, 200, 4, 10, "Particle Mass"); // default 5
 
-    button_start.setCallback([&show_menu, &bounds, &simulator, &button_reset, &button_start, &slider_gridsize]() {
+    button_start.setCallback([&show_menu, &bounds, &simulator, &button_reset, &button_start, &slider_gridsize, &slider_radius, &slider_viscosity ,&slider_max_velocity, &slider_mass]() {
         show_menu = false;
         button_reset.setEnabled(true);
         button_start.setEnabled(false);
+
+        // Modify Fluid Simulator attributes
+        simulator.PARTICLE_RADIUS = static_cast<float>(slider_radius.getValue()); // od 2 do 10
+        simulator.MAX_VELOCITY = static_cast<float>(slider_max_velocity.getValue()); // od 300 do 1000
+        simulator.PARTICLE_MASS = static_cast<float>(slider_mass.getValue()); //
+        simulator.DAMPING = static_cast<float>(1.f - slider_viscosity.getValue()/100.f); // do 7000
 
         const int GRID_SIZE = slider_gridsize.getValue();
         const float SPACING = 12.f;
@@ -560,6 +569,10 @@ int main() {
         sf::Event event;
         while (window.pollEvent(event)) {
             slider_gridsize.handleEvent(event, window);
+            slider_radius.handleEvent(event, window);
+            slider_viscosity.handleEvent(event, window);
+            slider_max_velocity.handleEvent(event, window);
+            slider_mass.handleEvent(event, window);
             switch (event.type) {
                 case sf::Event::Closed:
                     window.close();
@@ -622,6 +635,10 @@ int main() {
         if (show_menu) {
             button_start.draw(window);
             slider_gridsize.draw(window);
+            slider_radius.draw(window);
+            slider_viscosity.draw(window);
+            slider_max_velocity.draw(window);
+            slider_mass.draw(window);
         } else {
             simulator.update(DELTA_TIME);
             simulator.draw(window);
