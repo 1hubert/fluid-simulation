@@ -6,15 +6,10 @@
 	<algorithm>
 	<iostream>
 
-1738153673 source:c:\users\acer\desktop\podstawy informatyki wyklad\fluid-simulation\main.cpp
+1738167843 source:c:\users\acer\desktop\podstawy informatyki wyklad\fluid-simulation\main.cpp
 	<SFML/Graphics.hpp>
-	<vector>
 	<cmath>
-	<algorithm>
 	<iostream>
-	<array>
-	<sstream>
 	<iomanip>
-	<time.h>
 	<functional>
 

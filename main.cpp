@@ -1,20 +1,9 @@
 #include <SFML/Graphics.hpp>
-#include <vector>
 #include <cmath>
-#include <algorithm>
 #include <iostream>
-#include <array>
-#include <sstream>
 #include <iomanip>
 #include <time.h>
 #include <functional>
-
-
-// onclick square /w collision
-// parametrization for grid size
-
-// CTRL+SHIFT+C to comment
-// CTRL+SHIFT+X to UNcomment
 
 bool show_menu = true;
 bool show_coloring = true;
@@ -242,9 +231,9 @@ private:
     const float GAS_CONSTANT = 100.f;
     const float SMOOTHING_LENGTH = 15.f;
     const float SMOOTHING_LENGTH_SQ = SMOOTHING_LENGTH * SMOOTHING_LENGTH;
-    const float POLY6_SCALE = 315.f / (64.f * M_PI * std::pow(SMOOTHING_LENGTH, 4));
-    const float SPIKY_GRAD_SCALE = -45.f / (M_PI * std::pow(SMOOTHING_LENGTH, 6));
-    const float VISC_LAP_SCALE = 45.f / (M_PI * std::pow(SMOOTHING_LENGTH, 6));
+    const float POLY6_SCALE = 315.f / (64.f * 3.14 * std::pow(SMOOTHING_LENGTH, 4));
+    const float SPIKY_GRAD_SCALE = -45.f / (3.14 * std::pow(SMOOTHING_LENGTH, 6));
+    const float VISC_LAP_SCALE = 45.f / (3.14 * std::pow(SMOOTHING_LENGTH, 6));
 public:
     float REST_DENSITY = 1000.f; //1000 works well
     float DAMPING = 0.4f;
@@ -349,11 +338,6 @@ public:
             window.draw(p.shape);
         }
     }
-
-    void checkSquareCollision(sf::RectangleShape& square) {
-// todo
-    }
-
 private:
     void computeDensityPressure() {
         for (auto& pi : particles) {
@@ -517,11 +501,6 @@ int main() {
         window.getSize().y - 2 * (BORDER_PADDING + BORDER_THICKNESS)
     );
 
-    // Square setup
-//    sf::RectangleShape movableSquare(sf::Vector2f(50.f, 50.f));
-//    movableSquare.setFillColor(sf::Color::Green);
-//    movableSquare.setPosition(200.f, 200.f); // Initial position
-
     // Define FluidSimulator
     FluidSimulator simulator(bounds);
 
@@ -623,26 +602,9 @@ int main() {
             }
         }
 
-//         Move the square based on mouse position
-//        if (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
-//            sf::Vector2i mousePosition = sf::Mouse::getPosition(window);
-//             Constrain square within the border
-//            sf::Vector2f newPos(
-//                std::clamp(static_cast<float>(mousePosition.x) - movableSquare.getSize().x / 2.f,
-//                bounds.left, bounds.left + bounds.width - movableSquare.getSize().x),
-//                std::clamp(static_cast<float>(mousePosition.y) - movableSquare.getSize().y / 2.f,
-//                bounds.top, bounds.top + bounds.height - movableSquare.getSize().y)
-//            );
-//            movableSquare.setPosition(newPos);
-//        }
-
         fps_counter.update();
 
-        //simulator.checkSquareCollision(movableSquare);
-
         window.clear();
-
-        //window.draw(movableSquare);
 
         button_coloring.draw(window);
         if (show_menu) {
