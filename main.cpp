@@ -17,6 +17,7 @@
 // CTRL+SHIFT+X to UNcomment
 
 bool show_menu = true;
+bool show_coloring = true;
 
 class Slider {
 private:
@@ -319,33 +320,35 @@ public:
         }
     }
 
-void draw(sf::RenderWindow& window) {
-    // Find max pressure in current frame for dynamic scaling
-    float max_pressure = 0.0f;
-    for (const auto& p : particles) {
-        max_pressure = std::max(max_pressure, p.pressure);
+    void draw(sf::RenderWindow& window) {
+        // Find max pressure in current frame for dynamic scaling
+        float max_pressure = 0.0f;
+        for (const auto& p : particles) {
+            max_pressure = std::max(max_pressure, p.pressure);
 
+        }
+
+        // Avoid division by zero
+        max_pressure = std::max(max_pressure, 0.0001f);
+
+        for (auto& p : particles) {
+            // Normalize pressure between 0 and 1
+            float pressure_scale = p.pressure / max_pressure;
+
+            // Create a color gradient from blue (low pressure) to red (high pressure)
+            sf::Color color(
+                static_cast<sf::Uint8>(200 * pressure_scale),                    // Red
+                static_cast<sf::Uint8>(100 * (1.0f - pressure_scale)),          // Green
+                static_cast<sf::Uint8>(255 * (1.0f - pressure_scale))           // Blue
+            );
+            if (show_coloring)
+                p.shape.setFillColor(color);
+            else
+                p.shape.setFillColor(sf::Color::Cyan);
+            p.shape.setPosition(p.position);
+            window.draw(p.shape);
+        }
     }
-
-    // Avoid division by zero
-    max_pressure = std::max(max_pressure, 0.0001f);
-
-    for (auto& p : particles) {
-        // Normalize pressure between 0 and 1
-        float pressure_scale = p.pressure / max_pressure;
-
-        // Create a color gradient from blue (low pressure) to red (high pressure)
-        sf::Color color(
-            static_cast<sf::Uint8>(200 * pressure_scale),                    // Red
-            static_cast<sf::Uint8>(100 * (1.0f - pressure_scale)),          // Green
-            static_cast<sf::Uint8>(255 * (1.0f - pressure_scale))           // Blue
-        );
-
-        p.shape.setFillColor(color);
-        p.shape.setPosition(p.position);
-        window.draw(p.shape);
-    }
-}
 
     void checkSquareCollision(sf::RectangleShape& square) {
 // todo
@@ -524,14 +527,15 @@ int main() {
 
     // Button & Slider setup
     Button button_start(300, 200, 200, 50, "Start", font);
-    Button button_reset(300, 260, 200, 50, "Reset", font);
+    Button button_reset(550, 90, 220, 50, "Reset", font);
+    Button button_coloring(550, 30, 220, 50, "Show Pressure ON/OFF", font);
     Slider slider_gridsize(300, 300, 200, 1, 35, "Grid Size");
     Slider slider_radius(300, 360, 200, 3, 10, "Particle Radius"); // default 5
-    Slider slider_viscosity(300, 420, 200, 0, 100, "Damping%"); // default 7000
+    Slider slider_damping(300, 420, 200, 0, 100, "Damping%"); // default 7000
     Slider slider_max_velocity(300, 480, 200, 300, 1000, "Max Velocity"); // default 300
     Slider slider_mass(300, 540, 200, 4, 10, "Particle Mass"); // default 5
 
-    button_start.setCallback([&show_menu, &bounds, &simulator, &button_reset, &button_start, &slider_gridsize, &slider_radius, &slider_viscosity ,&slider_max_velocity, &slider_mass]() {
+    button_start.setCallback([&show_menu, &bounds, &simulator, &button_reset, &button_start, &slider_gridsize, &slider_radius, &slider_damping ,&slider_max_velocity, &slider_mass]() {
         show_menu = false;
         button_reset.setEnabled(true);
         button_start.setEnabled(false);
@@ -540,7 +544,7 @@ int main() {
         simulator.PARTICLE_RADIUS = static_cast<float>(slider_radius.getValue()); // od 2 do 10
         simulator.MAX_VELOCITY = static_cast<float>(slider_max_velocity.getValue()); // od 300 do 1000
         simulator.PARTICLE_MASS = static_cast<float>(slider_mass.getValue()); //
-        simulator.DAMPING = static_cast<float>(1.f - slider_viscosity.getValue()/100.f); // do 7000
+        simulator.DAMPING = static_cast<float>(1.f - slider_damping.getValue()/100.f); // do 7000
 
         const int GRID_SIZE = slider_gridsize.getValue();
         const float SPACING = 12.f;
@@ -565,12 +569,19 @@ int main() {
         simulator.removeAllParticles();
     });
 
+    button_coloring.setCallback([]() {
+        if (show_coloring)
+            show_coloring = false;
+        else
+            show_coloring = true;
+    });
+
     while (window.isOpen()) {
         sf::Event event;
         while (window.pollEvent(event)) {
             slider_gridsize.handleEvent(event, window);
             slider_radius.handleEvent(event, window);
-            slider_viscosity.handleEvent(event, window);
+            slider_damping.handleEvent(event, window);
             slider_max_velocity.handleEvent(event, window);
             slider_mass.handleEvent(event, window);
             switch (event.type) {
@@ -605,6 +616,7 @@ int main() {
                 case sf::Event::MouseButtonPressed:
                     button_start.handleEvent(event, window);
                     button_reset.handleEvent(event, window);
+                    button_coloring.handleEvent(event, window);
                     break;
                 default:
                     break;
@@ -632,11 +644,12 @@ int main() {
 
         //window.draw(movableSquare);
 
+        button_coloring.draw(window);
         if (show_menu) {
             button_start.draw(window);
             slider_gridsize.draw(window);
             slider_radius.draw(window);
-            slider_viscosity.draw(window);
+            slider_damping.draw(window);
             slider_max_velocity.draw(window);
             slider_mass.draw(window);
         } else {
